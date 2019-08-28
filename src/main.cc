@@ -291,7 +291,38 @@ void init_config() {
 #undef CFG
 }
 
-void planet(const char* fname) {
+bool GetIntersection(double u, double v,
+  double &x, double &y, double &z)
+{
+  double Nx    = 0.0;
+  double Ny    = 0.0;
+  double Nz    = 1.0;
+  double dir_x = u - Nx;
+  double dir_y = v - Ny;
+  double dir_z = -1.0 - Nz;
+ 
+  double a = (dir_x * dir_x) + (dir_y * dir_y) + (dir_z * dir_z);
+  double b = (dir_x * Nx) + (dir_y * Ny) + (dir_z * Nz);
+ 
+  b *= 2;
+  double d = b*b;
+  double q = -0.5 * (b - std::sqrt(d));
+ 
+  double t = q / a;
+ 
+  x = (dir_x * t) + Nx;
+  y = (dir_y * t) + Ny;
+  z = (dir_z * t) + Nz;
+  return true;
+}
+
+/**
+ * 
+ * pitch: angle of x-axis rotation
+ * roll:  angle of y-axis rotation
+ * yaw:   angle of z-axis rotation
+ */
+void planet(const char* fname, const double fov, const double pitch, const double roll, const double yaw) {
 	Mat32f test = read_img(fname);
 	int w = test.width(), h = test.height();
 	const int OUTSIZE = 1000, center = OUTSIZE / 2;
@@ -299,35 +330,64 @@ void planet(const char* fname) {
 	fill(ret, Color::NO);
 
 	REP(i, OUTSIZE) REP(j, OUTSIZE) {
-		real_t dist = hypot(center - i, center - j);
-		if (dist >= center || dist == 0) continue;
-		dist = dist / center;
-		//dist = sqr(dist);	// TODO you can change this to see different effect
-		dist = h - dist * h;
+		double sphereX = (i - center) * 4.0 * std::tan((fov/2) * M_PI / 180.0) / OUTSIZE;
+		double sphereY = (j - center) * 4.0 * std::tan((fov/2) * M_PI / 180.0) / OUTSIZE;
+		double Qx, Qy, Qz;
 
-		real_t theta;
-		if (j == center) {
-			if (i < center)
-				theta = M_PI / 2;
-			else
-				theta = 3 * M_PI / 2;
-		} else {
-			theta = atan((real_t)(center - i) / (center - j));
-			if (theta < 0) theta += M_PI;
-			if ((theta == 0) && (j > center)) theta += M_PI;
-			if (center < i) theta += M_PI;
+		if (GetIntersection(sphereX, sphereY, Qx, Qy, Qz))
+		{
+			if(pitch != 0)
+			{
+				double theta_x = pitch * M_PI / 180.0;
+				double rot_y = Qy * cos(theta_x) + Qz * sin(theta_x);
+				double rot_z = Qy * sin(theta_x) * -1 + Qz * cos(theta_x);
+				Qy = rot_y; Qz = rot_z;
+			}
+			if(roll != 0) 
+			{
+				double theta_y = roll * M_PI / 180.0;
+				double rot_x = Qx * cos(theta_y) - Qz * sin(theta_y);
+				double rot_z = Qx * sin(theta_y) + Qz * cos(theta_y);
+				Qx = rot_x; Qz = rot_z;
+			}
+			if(yaw != 0)
+			{
+				double theta_z = yaw * M_PI / 180.0;
+				double rot_x = Qx * cos(theta_z) + Qy * sin(theta_z);
+				double rot_y = Qx * sin(theta_z) * -1 + Qy * cos(theta_z);
+				Qx = rot_x; Qy = rot_y;
+			}
+			
+			double theta = std::acos(Qz);
+			double phi   = std::atan2(Qy, Qx) + M_PI;
+			theta        = theta * M_1_PI;
+			phi          = phi   * (0.5 * M_1_PI);
+			double Sx    = min(w - 2.0, w * phi);
+			double Sy    = min(h - 2.0, h * theta);
+
+			Color c = interpolate(test, Sy, Sx);
+			float* p = ret.ptr(j, i);
+			c.write_to(p);
 		}
-		m_assert(0 <= theta);
-		m_assert(2 * M_PI + EPS >= theta);
-
-		theta = theta / (M_PI * 2) * w;
-
-		update_min(dist, (real_t)h - 1);
-		Color c = interpolate(test, dist, theta);
-		float* p = ret.ptr(i, j);
-		c.write_to(p);
 	}
-	write_rgb(IMGFILE(planet), ret);
+	string srcFile = fname;
+	if(srcFile.find("dji") != string::npos || srcFile.find("DJI") != string::npos)
+		write_rgb(ssprintf("./planet_dji_pano/fov%.2f_pitch%.2f_roll%.2f_yaw%.2f.jpg", fov, pitch, roll, yaw), ret);
+	else
+		write_rgb(ssprintf("./planet_my_pano/fov%.2f_pitch%.2f_roll%.2f_yaw%.2f.jpg", fov, pitch, roll, yaw), ret);
+}
+
+/**
+ * 
+ */
+void planet_ani(const char* fname) {
+	for(int i=0; i < 35; i++)
+	{
+		// planet(fname, 110.0-0.1*i, 0.01*i, -0.01*i, 135.0+0.2*i); //230-299 frames
+		// planet(fname, 103.0-0.8*i, 0.7+0.3*i, -0.7-0.3*i, 149.0+1.74*i); //195-229 frames
+		// planet(fname, 75.0-0.8*i, 11.2+0.3*i, -11.2+0.3*i, 210.0+1.74*i); //160-194 frames
+		planet(fname, 47.0-1.5*i, 21.4+0.0*i, -0.9+0.1*i, 270.0+0.0*i); //150-159 frames
+	}
 }
 
 int main(int argc, char* argv[]) {
@@ -350,7 +410,9 @@ int main(int argc, char* argv[]) {
 	else if (command == "warp")
 		test_warp(argc, argv);
 	else if (command == "planet")
-		planet(argv[2]);
+		planet(argv[2], strtod(argv[3], NULL), strtod(argv[4], NULL), strtod(argv[5], NULL), strtod(argv[6], NULL));
+	else if (command == "planet_ani")
+		planet_ani(argv[2]);
 	else
 		// the real routine
 		work(argc, argv);
