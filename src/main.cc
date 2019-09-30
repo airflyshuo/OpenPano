@@ -316,22 +316,26 @@ bool GetIntersection(double u, double v,
   return true;
 }
 
+const int PLANET_OUT_W = 1920, PLANET_OUT_H = 1080;
+string planet_out_dir = "./planet_my_pano";
 /**
- * 
+ * actual_w: The width of the actual area of the image
+ * fov: field of view
  * pitch: angle of x-axis rotation
  * roll:  angle of y-axis rotation
  * yaw:   angle of z-axis rotation
  */
-void planet(const char* fname, const double fov, const double pitch, const double roll, const double yaw) {
-	Mat32f test = read_img(fname);
-	int w = test.width(), h = test.height();
-	const int OUTSIZE = 1000, center = OUTSIZE / 2;
-	Mat32f ret(OUTSIZE, OUTSIZE, 3);
-	fill(ret, Color::NO);
+void planet(const Mat32f panoImg, int actual_w, const double fov, const double pitch, const double roll, const double yaw) {
+	int w = panoImg.width(), h = panoImg.height();
+	const int center_w = PLANET_OUT_W / 2, center_h = PLANET_OUT_H / 2;
+	update_min(actual_w, PLANET_OUT_W);
 
-	REP(i, OUTSIZE) REP(j, OUTSIZE) {
-		double sphereX = (i - center) * 4.0 * std::tan((fov/2) * M_PI / 180.0) / OUTSIZE;
-		double sphereY = (j - center) * 4.0 * std::tan((fov/2) * M_PI / 180.0) / OUTSIZE;
+	Mat32f ret(PLANET_OUT_H, PLANET_OUT_W, 3);
+	fill(ret, Color::BLACK);
+
+	REPL(i, center_w - actual_w/2, center_w + actual_w/2) REP(j, PLANET_OUT_H) {
+		double sphereX = (i - center_w) * 4.0 * std::tan((fov/2) * M_PI / 180.0) / PLANET_OUT_H;
+		double sphereY = (j - center_h) * 4.0 * std::tan((fov/2) * M_PI / 180.0) / PLANET_OUT_H;
 		double Qx, Qy, Qz;
 
 		if (GetIntersection(sphereX, sphereY, Qx, Qy, Qz))
@@ -365,28 +369,80 @@ void planet(const char* fname, const double fov, const double pitch, const doubl
 			double Sx    = min(w - 2.0, w * phi);
 			double Sy    = min(h - 2.0, h * theta);
 
-			Color c = interpolate(test, Sy, Sx);
+			Color c = interpolate(panoImg, Sy, Sx);
 			float* p = ret.ptr(j, i);
 			c.write_to(p);
 		}
 	}
+	
+	write_rgb(ssprintf("%s/fov%.2f_pitch%.2f_roll%.2f_yaw%.2f.jpg", planet_out_dir.data(), fov, pitch, roll, yaw), ret);
+}
+
+void planet(const char* fname, const double fov, const double pitch, const double roll, const double yaw) {
 	string srcFile = fname;
 	if(srcFile.find("dji") != string::npos || srcFile.find("DJI") != string::npos)
-		write_rgb(ssprintf("./planet_dji_pano/fov%.2f_pitch%.2f_roll%.2f_yaw%.2f.jpg", fov, pitch, roll, yaw), ret);
-	else
-		write_rgb(ssprintf("./planet_my_pano/fov%.2f_pitch%.2f_roll%.2f_yaw%.2f.jpg", fov, pitch, roll, yaw), ret);
+		planet_out_dir = "./planet_dji_pano";
+
+	planet(read_img(fname), PLANET_OUT_W, fov, pitch, roll, yaw);
+}
+
+void planet(const Mat32f panoImg, const double fov, const double pitch, const double roll, const double yaw) {
+	planet(panoImg, PLANET_OUT_W, fov, pitch, roll, yaw);
 }
 
 /**
- * 
+ * Generate frames of the animation of planet
  */
-void planet_ani(const char* fname) {
-	for(int i=0; i < 35; i++)
+void planet_ani(const char* fname, const int part) {
+	Mat32f panoImg = read_img(fname);
+	string srcFile = fname;
+	if(srcFile.find("dji") != string::npos || srcFile.find("DJI") != string::npos)
+		planet_out_dir = "./planet_dji_pano";
+
+	//230-299 frames
+	double fov = 110, pitch = 0.0, roll = 0.0, yaw = 135.0;
+	if(part >= 1)
 	{
-		// planet(fname, 110.0-0.1*i, 0.01*i, -0.01*i, 135.0+0.2*i); //230-299 frames
-		// planet(fname, 103.0-0.8*i, 0.7+0.3*i, -0.7-0.3*i, 149.0+1.74*i); //195-229 frames
-		// planet(fname, 75.0-0.8*i, 11.2+0.3*i, -11.2+0.3*i, 210.0+1.74*i); //160-194 frames
-		planet(fname, 47.0-1.5*i, 21.4+0.0*i, -0.9+0.1*i, 270.0+0.0*i); //150-159 frames
+		for(int i = 0; i < 70; i++)
+		{
+			// if(part == 1)
+				planet(panoImg, PLANET_OUT_H + i*12, fov, pitch, roll, yaw);
+			fov -= 0.1;
+			pitch += 0.01;
+			roll -= 0.01;
+			yaw += 0.2;
+		}
+	}
+	//160-229 frames
+	//start from fov103.00_pitch0.70_roll-0.70_yaw149.00
+	if(part >= 2)
+	{
+		double s_pitch = pitch;
+		double s_roll = roll;
+		for(int i = 0; i < 70; i++)
+		{
+			double dx = sin(i * M_PI/70);
+			double dy = cos(i * M_PI/70);
+			double pitch_offset = (1 - dy) * (11.2 - 0.7);
+			double roll_offset = dx * (11.2 - 0.7);
+			pitch = s_pitch + pitch_offset;
+			roll = s_roll - roll_offset;
+			// if(part == 2)
+				planet(panoImg, fov, pitch, roll, yaw);
+			fov -= 0.8;
+			yaw += 1.74;
+		}
+	}
+	//150-159 frames
+	if(part == 3)
+	{
+		double roll_offset = roll/10.0;
+		for(int i = 0; i < 10; i++)
+		{
+			roll -= roll_offset;
+			planet(panoImg, fov, pitch, roll, 270.0);
+			fov -= 1.5;
+		}
 	}
 }
 
@@ -412,7 +468,7 @@ int main(int argc, char* argv[]) {
 	else if (command == "planet")
 		planet(argv[2], strtod(argv[3], NULL), strtod(argv[4], NULL), strtod(argv[5], NULL), strtod(argv[6], NULL));
 	else if (command == "planet_ani")
-		planet_ani(argv[2]);
+		planet_ani(argv[2], strtol(argv[3], NULL, 10));
 	else
 		// the real routine
 		work(argc, argv);
