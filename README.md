@@ -10,8 +10,6 @@ planet_ani 基于大疆Mavic拍摄的全景图，生成球体平面投影(小行
 
 # OpenPano
 
-![cmu0](results/CMU0-all.jpg)
-
 ## Introduction
 
 OpenPano is a panorama stitching program written in C++ from scratch (without any vision libraries). It mainly follows the routine
