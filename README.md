@@ -1,3 +1,13 @@
+# 小行星
+
+planet_ani 基于大疆Mavic拍摄的全景图，生成球体平面投影(小行星)短视频图片序列
+* part1 微小旋转，画面展开
+* part2 螺旋旋转至拍摄者斜上方
+* part3 拉近镜头
+
+## Example
+![planet last frame](results/planet_dji.jpg)
+
 # OpenPano
 
 ![cmu0](results/CMU0-all.jpg)
@@ -88,29 +98,6 @@ Before dealing with very large images (4 megapixels or more), it's better to res
 
 In cylinder/translation mode, the input file names need to have the correct order.
 
-## Examples ([All original data available for __download__](https://github.com/ppwwyyxx/OpenPano/releases/tag/0.1)):
-
-Zijing Apartment in Tsinghua University:
-![dorm](results/apartment.jpg)
-
-"Myselves":
-![myself](results/myself.jpg)
-
-<!--
-   -Zijing Playground in Tsinghua University:
-   -![planet](https://github.com/ppwwyyxx/panorama/raw/master/results/planet.jpg)
-	 -->
-
-Carnegie Mellon University from 38 images
-![apple](results/apple.jpg)
-
-Newell-Simon Hall in CMU (this one is hard because objects are closer):
-![nsh](results/NSH-all.jpg)
-
-A full-view pano built from UAV images:
-![uav](results/uav.jpg)
-
-For more examples, see [results](results).
 
 ## Speed & Memory:
 Tested on Intel Core i7-6700HQ, with `ESTIMATE_CAMERA` mode:
@@ -145,15 +132,3 @@ To get the best stitching quality:
 + The algorithm doesn't work well with wide-angle cameras where images are distorted heavily. Camera
 	parameters are needed to undistort the images.
 
-## TODOs
-+ apply pairwise matching for translation mode as well
-+ run bundle adjustment on sphere lens instead of perspective lens
-+ improve feature detector and matching
-+ use LAZY_READ & 1 byte image in both blender to reduce peak memory
-+ clean up use of copies of `ImageRef`
-+ faster gaussian blur kernel
-+ port some hotspot (e.g. `dist.cc`) to neon
-+ support read/write EXIF metadata to:
-	+ get focal length, distortion, etc
-	+ allow pano to be viewed on Facebook
-+ python bindings
